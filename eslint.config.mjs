@@ -11,7 +11,6 @@ const eslintConfig = defineConfig([
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       'no-console': ['warn', { allow: ['warn', 'error'] }],
-      // Слои FSD: нижний слой не импортирует из верхнего.
       'no-restricted-imports': [
         'error',
         {
