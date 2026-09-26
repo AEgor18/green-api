@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GREEN-API Chat
 
-## Getting Started
+Веб-чат для отправки и получения сообщений WhatsApp через [GREEN-API](https://green-api.com).
+Интерфейс повторяет WhatsApp Web. Бэкенда нет: приложение собирается в статику и обращается к
+GREEN-API напрямую из браузера.
 
-First, run the development server:
+## Возможности
+
+- Вход по `idInstance` / `apiTokenInstance` / `apiUrl` с проверкой состояния инстанса (`getStateInstance`).
+- Создание чата по номеру телефона (`+7 900…`, `8 900…` → `79001234567@c.us`).
+- Отправка текстовых сообщений (`sendMessage`): оптимистичный показ, статусы
+  «отправляется → отправлено → доставлено → прочитано», повтор при ошибке.
+- Получение сообщений через HTTP API очереди: `receiveNotification` (long-poll) → `deleteNotification`.
+  Входящие, отправленные с телефона и статусы исходящих; медиа показывается заглушкой.
+- Список чатов с непрочитанными и поиском, группировка сообщений по дням.
+- История и сессия в `localStorage` (отдельно для каждого инстанса).
+- Адаптивная вёрстка (мобильный режим «список ↔ чат»), светлая и тёмная темы.
+
+## Стек
+
+Next.js 16 (App Router, `output: 'export'`) · React 19 · TypeScript · Redux Toolkit + RTK Query ·
+React Hook Form + Zod · Tailwind CSS 4 + shadcn/ui · Vitest + Testing Library + MSW ·
+ESLint + Prettier.
+
+## Запуск
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Для входа нужен инстанс GREEN-API: зарегистрируйтесь в [личном кабинете](https://console.green-api.com),
+создайте инстанс (тариф Developer бесплатный), отсканируйте QR-код в WhatsApp и возьмите
+`idInstance`, `apiTokenInstance` и `apiUrl` из карточки инстанса.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> Входящие приходят через очередь уведомлений, поэтому в настройках инстанса поле
+> «URL для отправки уведомлений» (webhookUrl) должно быть **пустым**, а получение
+> входящих сообщений и статусов — включено.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Скрипты
 
-## Learn More
+| Команда                           | Что делает                        |
+| --------------------------------- | --------------------------------- |
+| `npm run dev`                     | dev-сервер                        |
+| `npm run build`                   | статическая сборка в `out/`       |
+| `npm start`                       | раздать `out/` локально           |
+| `npm test` / `npm run test:watch` | тесты                             |
+| `npm run test:coverage`           | тесты с покрытием                 |
+| `npm run lint` / `npm run format` | ESLint / Prettier                 |
+| `npm run check`                   | typecheck + lint + format + тесты |
 
-To learn more about Next.js, take a look at the following resources:
+Для деплоя в подпапку (GitHub Pages) задайте `NEXT_PUBLIC_BASE_PATH=/repo-name` при сборке.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Архитектура
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Код организован по [Feature-Sliced Design](https://feature-sliced.design). Слой импортирует только из
+нижележащих слоёв и только через публичный `index.ts` слайса; это проверяет ESLint.
 
-## Deploy on Vercel
+```
+src/
+├── app/                  # Next.js роутинг + слой app: провайдеры, стор, сохранение в localStorage
+│   ├── _providers/
+│   └── _store/           # makeStore, listener middleware для persistence, глобальные типы
+├── views/messenger/      # страница: экран входа / мессенджер (слой pages; pages занято Next)
+├── widgets/
+│   ├── chat-sidebar/     # шапка, поиск, список чатов, баннер «нет связи»
+│   └── chat-window/      # шапка чата, лента с плашками дней, поле ввода
+├── features/
+│   ├── auth/             # форма входа, выход
+│   ├── new-chat/         # диалог «новый чат» по номеру
+│   ├── send-message/     # отправка/повтор (thunk-и), поле ввода
+│   ├── receive-messages/ # цикл receiveNotification → deleteNotification
+│   └── toggle-theme/
+├── entities/
+│   ├── session/          # учётные данные, схема валидации
+│   └── chat/             # чаты и сообщения, разбор webhook-уведомлений, UI сообщений
+├── shared/
+│   ├── api/green-api/    # RTK Query клиент, типы API, тексты ошибок
+│   ├── config/  lib/     # телефоны, время, localStorage-обёртка, типизированные хуки стора
+│   └── ui/               # компоненты shadcn/ui
+└── test/                 # MSW-сервер и фикстуры, хелперы рендера
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Ключевые решения
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Поллинг вместо вебхуков.** Без бэкенда вебхук принимать некому, поэтому используется очередь
+  HTTP API. Цикл (`runNotificationPolling`) сам задаёт темп long-poll'ом, после ошибок делает
+  паузу, а после подозрительно быстрого пустого ответа выдерживает минимальный интервал.
+  Уведомление удаляется всегда, иначе очередь встанет. Повторная доставка безопасна:
+  сообщения дедуплицируются по `idMessage`.
+- **RTK Query-мутации с `track: false`** для поллинга и отправки: результаты не копятся в сторе.
+- **Статусы только растут.** Поздно пришедший `delivered` не затирает `read`.
+- **Учётные данные хранятся только в `localStorage` браузера.** Для тестового задания без бэкенда это
+  приемлемо; в продакшене токен стоило бы держать на сервере и проксировать запросы.
+
+## Тесты
+
+Юнит-тесты на утилиты, редьюсеры, разбор уведомлений и thunk-и; компонентные тесты форм;
+интеграционный сценарий «входящее → открыть чат → ответить». HTTP мокается через MSW.
