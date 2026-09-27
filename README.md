@@ -24,6 +24,28 @@ ESLint + Prettier.
 
 ## Запуск
 
+### Docker
+
+Нужен только Docker. Образ собирает статику и раздаёт её через nginx (~95 МБ).
+
+```bash
+docker compose up -d --build     # http://localhost:8080
+docker compose down              # остановить
+```
+
+Другой порт: `PORT=3000 docker compose up -d --build`.
+
+Без compose:
+
+```bash
+docker build -t green-chat .
+docker run -d -p 8080:80 --name green-chat green-chat
+```
+
+### Локально
+
+Нужен Node.js 24+.
+
 ```bash
 npm install
 npm run dev          # http://localhost:3000
@@ -36,6 +58,9 @@ npm run dev          # http://localhost:3000
 > Входящие приходят через очередь уведомлений, поэтому в настройках инстанса поле
 > «URL для отправки уведомлений» (webhookUrl) должно быть **пустым**, а получение
 > входящих сообщений и статусов — включено.
+>
+> Каждое уведомление из очереди получает только один клиент. Если открыть приложение с одним
+> инстансом в нескольких вкладках, входящие распределятся между ними.
 
 ## Скрипты
 
