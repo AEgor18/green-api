@@ -1,0 +1,7 @@
+services:
+  green-chat:
+    build: .
+    image: green-chat
+    ports:
+      - '${PORT:-8080}:80'
+    restart: unless-stopped
