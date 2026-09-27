@@ -1,6 +1,10 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 
-import { RECEIVE_TIMEOUT_SEC } from '@/shared/config';
+import {
+  RECEIVE_REQUEST_TIMEOUT_MS,
+  RECEIVE_TIMEOUT_SEC,
+  SEND_REQUEST_TIMEOUT_MS,
+} from '@/shared/config';
 
 import { greenApiBaseQuery } from './base-query';
 import type {
@@ -25,13 +29,19 @@ export const greenApi = createApi({
     }),
 
     sendMessage: build.mutation<SendMessageResponse, SendMessageRequest>({
-      query: (body) => ({ method: 'sendMessage', httpMethod: 'POST', body }),
+      query: (body) => ({
+        method: 'sendMessage',
+        httpMethod: 'POST',
+        body,
+        timeout: SEND_REQUEST_TIMEOUT_MS,
+      }),
     }),
 
     receiveNotification: build.mutation<GreenApiNotification | null, void>({
       query: () => ({
         method: 'receiveNotification',
         params: { receiveTimeout: RECEIVE_TIMEOUT_SEC },
+        timeout: RECEIVE_REQUEST_TIMEOUT_MS,
       }),
     }),
 

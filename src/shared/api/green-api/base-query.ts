@@ -12,6 +12,7 @@ export interface GreenApiRequest {
   params?: Record<string, string | number>;
   body?: unknown;
   credentials?: GreenApiCredentials;
+  timeout?: number;
 }
 
 interface StateWithSession {
@@ -28,10 +29,18 @@ export function buildMethodUrl(
   return `${base}/waInstance${idInstance}/${method}/${apiTokenInstance}${suffix}`;
 }
 
-const rawBaseQuery = fetchBaseQuery({ timeout: REQUEST_TIMEOUT_MS });
+const rawBaseQuery = fetchBaseQuery();
 
 export const greenApiBaseQuery: BaseQueryFn<GreenApiRequest, unknown, FetchBaseQueryError> = (
-  { method, httpMethod = 'GET', pathParam, params, body, credentials },
+  {
+    method,
+    httpMethod = 'GET',
+    pathParam,
+    params,
+    body,
+    credentials,
+    timeout = REQUEST_TIMEOUT_MS,
+  },
   api,
   extraOptions,
 ) => {
@@ -41,7 +50,13 @@ export const greenApiBaseQuery: BaseQueryFn<GreenApiRequest, unknown, FetchBaseQ
   }
 
   return rawBaseQuery(
-    { url: buildMethodUrl(resolved, method, pathParam), method: httpMethod, params, body },
+    {
+      url: buildMethodUrl(resolved, method, pathParam),
+      method: httpMethod,
+      params,
+      body,
+      timeout,
+    },
     api,
     extraOptions,
   );

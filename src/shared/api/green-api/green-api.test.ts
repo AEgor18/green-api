@@ -1,6 +1,8 @@
 import { combineSlices, configureStore } from '@reduxjs/toolkit';
-import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { delay, http, HttpResponse } from 'msw';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { REQUEST_TIMEOUT_MS, SEND_REQUEST_TIMEOUT_MS } from '@/shared/config';
 
 import {
   methodUrl,
@@ -56,6 +58,47 @@ describe('greenApi', () => {
 
     expect(result).toEqual({ idMessage: 'ABC' });
     expect(body).toEqual({ chatId: '7@c.us', message: 'hi' });
+  });
+
+  describe('таймауты', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const slowSend = (ms: number) =>
+      server.use(
+        http.post(methodUrl('sendMessage'), async () => {
+          await delay(ms);
+          return HttpResponse.json({ idMessage: 'SLOW' });
+        }),
+      );
+
+    it('sendMessage дожидается медленного ответа дольше общего таймаута', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      slowSend(REQUEST_TIMEOUT_MS + 5_000);
+      const store = setup();
+
+      const request = store
+        .dispatch(greenApi.endpoints.sendMessage.initiate({ chatId: '7@c.us', message: 'hi' }))
+        .unwrap();
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 5_000);
+
+      await expect(request).resolves.toEqual({ idMessage: 'SLOW' });
+    });
+
+    it('sendMessage всё же обрывается по своему таймауту', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      slowSend(SEND_REQUEST_TIMEOUT_MS + 5_000);
+      const store = setup();
+
+      const request = store
+        .dispatch(greenApi.endpoints.sendMessage.initiate({ chatId: '7@c.us', message: 'hi' }))
+        .unwrap()
+        .catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(SEND_REQUEST_TIMEOUT_MS);
+
+      expect(await request).toMatchObject({ status: 'TIMEOUT_ERROR' });
+    });
   });
 
   it('receiveNotification передаёт receiveTimeout и возвращает null на пустой очереди', async () => {
